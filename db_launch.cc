@@ -83,14 +83,11 @@ void dispatch_task(const Task *task,
                                   READ_ONLY, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             Future future = runtime->execute_task(ctx, launcher);
-            std::cout << "Value is: " << future.get_result<value_t>()
-                      << std::endl;
+            future.get_result<value_t>();
         } else if (command == "set") {
             value_t value;
             iss >> value;
             Record record = {address = address, value = value};
-            std::cout << "Setting address " << address << " to " << value
-                      << std::endl;
             TaskLauncher launcher(SET_TASK_ID,
                                   TaskArgument(&record, sizeof(record)));
             launcher.add_region_requirement(
@@ -100,7 +97,6 @@ void dispatch_task(const Task *task,
             launcher.add_field(0, FID_VALUE);
             Future future = runtime->execute_task(ctx, launcher);
             future.wait();
-            std::cout << "Done." << std::endl;
         } else if (command == "quit") {
             break;
         } else {
@@ -123,6 +119,8 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     address_t address = *(address_t *)task->args;
     const FieldAccessor<READ_ONLY, value_t, 1> store(regions[0], FID_VALUE);
     value_t value = store[address];
+    std::cout << "Value at address " << address << " is: " << value
+              << std::endl;
     return value;
 }
 
@@ -134,7 +132,6 @@ void set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     const FieldAccessor<WRITE_DISCARD, value_t, 1> store(regions[0],
                                                          FID_VALUE);
     store[address] = value;
-    std::cout << "-- " << address << " <= " << value << std::endl;
     return;
 }
 

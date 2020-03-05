@@ -1,11 +1,18 @@
 #include <cstdint>
+
+#include <chrono>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "legion.h"
 
 using namespace Legion;
+
+const int MIN_SLEEP_SECONDS = 1;
+const int MAX_SLEEP_SECONDS = 5;
 
 enum TaskID {
     DISPATCH_TASK_ID,
@@ -83,7 +90,6 @@ void dispatch_task(const Task *task,
                                   READ_ONLY, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             Future future = runtime->execute_task(ctx, launcher);
-            future.get_result<value_t>();
         } else if (command == "set") {
             value_t value;
             iss >> value;
@@ -96,7 +102,6 @@ void dispatch_task(const Task *task,
                                   WRITE_DISCARD, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             Future future = runtime->execute_task(ctx, launcher);
-            future.wait();
         } else if (command == "quit") {
             break;
         } else {
@@ -119,6 +124,10 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     address_t address = *(address_t *)task->args;
     const FieldAccessor<READ_ONLY, value_t, 1> store(regions[0], FID_VALUE);
     value_t value = store[address];
+    std::default_random_engine generator;
+    std::uniform_int_distribution<int> distribution(MIN_SLEEP_SECONDS,
+                                                    MAX_SLEEP_SECONDS);
+    std::this_thread::sleep_for(std::chrono::seconds(distribution(generator)));
     std::cout << "Value at address " << address << " is: " << value
               << std::endl;
     return value;
@@ -131,6 +140,10 @@ void set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     value_t value = record.value;
     const FieldAccessor<WRITE_DISCARD, value_t, 1> store(regions[0],
                                                          FID_VALUE);
+    std::default_random_engine generator;
+    std::uniform_int_distribution<int> distribution(MIN_SLEEP_SECONDS,
+                                                    MAX_SLEEP_SECONDS);
+    std::this_thread::sleep_for(std::chrono::seconds(distribution(generator)));
     store[address] = value;
     return;
 }

@@ -13,9 +13,12 @@ enum TaskID {
   SET_TASK_ID,
 };
 
+typedef uint8_t address_t;
+typedef int64_t value_t;
+
 typedef struct Record {
-    uint64_t address;
-    int64_t value;
+    address_t address;
+    value_t value;
 } Record;
 
 void dispatch_task(const Task *task,
@@ -23,7 +26,7 @@ void dispatch_task(const Task *task,
                    Context ctx, Runtime *runtime) {
     std::string line;
     std::string command;
-    uint64_t address;
+    address_t address;
 
     std::cout << "> ";
     std::getline(std::cin, line);
@@ -33,9 +36,9 @@ void dispatch_task(const Task *task,
         std::cout << "Reading address" << address << std::endl;
         TaskLauncher launcher(GET_TASK_ID, TaskArgument(&address, sizeof(address)));
         Future future = runtime->execute_task(ctx, launcher);
-        std::cout << "Value is: " << future.get_result<int>() << std::endl;
+        std::cout << "Value is: " << future.get_result<value_t>() << std::endl;
     } else if (command == "set") {
-        int64_t value;
+        value_t value;
         iss >> value;
         Record record = { address = address, value = value };
         std::cout << "Setting address " << address << " to " << value << std::endl;
@@ -51,10 +54,10 @@ void dispatch_task(const Task *task,
     }
 }
 
-int get_task(const Task *task,
-              const std::vector<PhysicalRegion> &regions,
-              Context ctx, Runtime *runtime) {
-    int address = *(const int*)task->args;
+value_t get_task(const Task *task,
+                 const std::vector<PhysicalRegion> &regions,
+                 Context ctx, Runtime *runtime) {
+    address_t address = *(address_t *)task->args;
     return address / 2;
 }
 
@@ -62,8 +65,8 @@ void set_task(const Task *task,
               const std::vector<PhysicalRegion> &regions,
               Context ctx, Runtime *runtime) {
     Record record = *(const Record*)task->args;
-    uint64_t address = record.address;
-    int64_t value = record.value;
+    address_t address = record.address;
+    value_t value = record.value;
     std::cout << "-- " << address << " <= " << value << std::endl;
     return;
 }
@@ -80,7 +83,7 @@ int main(int argc, char **argv) {
     {
         TaskVariantRegistrar registrar(GET_TASK_ID, "get");
         registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-        Runtime::preregister_task_variant<int, get_task>(registrar, "get");
+        Runtime::preregister_task_variant<value_t, get_task>(registrar, "get");
     }
 
     {

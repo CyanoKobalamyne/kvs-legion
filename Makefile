@@ -13,10 +13,7 @@
 # limitations under the License.
 #
 
-
-ifndef LG_RT_DIR
-$(error LG_RT_DIR variable is not defined, aborting build)
-endif
+LG_RT_DIR=./legion/runtime
 
 # Flags for directing the runtime makefile what to include
 DEBUG           ?= 1		# Include debugging symbols

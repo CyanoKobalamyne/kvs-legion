@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -11,6 +12,11 @@ enum TaskID {
   GET_TASK_ID,
   SET_TASK_ID,
 };
+
+typedef struct Record {
+    uint64_t address;
+    int64_t value;
+} Record;
 
 void dispatch_task(const Task *task,
                    const std::vector<PhysicalRegion> &regions,
@@ -26,12 +32,17 @@ void dispatch_task(const Task *task,
     if (command == "get") {
         std::cout << "Reading address" << address << std::endl;
         TaskLauncher launcher(GET_TASK_ID, TaskArgument(&address, sizeof(address)));
-        Future get_future = runtime->execute_task(ctx, launcher);
-        std::cout << "Value is: " << get_future.get_result<int>() << std::endl;
+        Future future = runtime->execute_task(ctx, launcher);
+        std::cout << "Value is: " << future.get_result<int>() << std::endl;
     } else if (command == "set") {
         int64_t value;
         iss >> value;
+        Record record = { address = address, value = value };
         std::cout << "Setting address " << address << " to " << value << std::endl;
+        TaskLauncher launcher(SET_TASK_ID, TaskArgument(&record, sizeof(record)));
+        Future future = runtime->execute_task(ctx, launcher);
+        future.wait();
+        std::cout << "Done." << std::endl;
     } else {
         std::cout << "Unrecognized command: " << command << std::endl;
         std::cout << "Allowed commands:" << std::endl;
@@ -50,6 +61,10 @@ int get_task(const Task *task,
 void set_task(const Task *task,
               const std::vector<PhysicalRegion> &regions,
               Context ctx, Runtime *runtime) {
+    Record record = *(const Record*)task->args;
+    uint64_t address = record.address;
+    int64_t value = record.value;
+    std::cout << "-- " << address << " <= " << value << std::endl;
     return;
 }
 

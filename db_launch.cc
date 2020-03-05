@@ -8,9 +8,9 @@
 using namespace Legion;
 
 enum TaskID {
-  DISPATCH_TASK_ID,
-  GET_TASK_ID,
-  SET_TASK_ID,
+    DISPATCH_TASK_ID,
+    GET_TASK_ID,
+    SET_TASK_ID,
 };
 
 enum FieldID {
@@ -26,19 +26,23 @@ typedef struct Record {
 } Record;
 
 void dispatch_task(const Task *task,
-                   const std::vector<PhysicalRegion> &regions,
-                   Context ctx, Runtime *runtime) {
+                   const std::vector<PhysicalRegion> &regions, Context ctx,
+                   Runtime *runtime) {
     // Define key-value store.
     Rect<1> address_space_bounds(std::numeric_limits<address_t>::min(),
                                  std::numeric_limits<address_t>::max());
-    IndexSpaceT<1> address_space = runtime->create_index_space(ctx, address_space_bounds);
+    IndexSpaceT<1> address_space =
+        runtime->create_index_space(ctx, address_space_bounds);
     FieldSpace field_space = runtime->create_field_space(ctx);
-    FieldAllocator allocator = runtime->create_field_allocator(ctx, field_space);
+    FieldAllocator allocator =
+        runtime->create_field_allocator(ctx, field_space);
     allocator.allocate_field(sizeof(value_t), FID_VALUE);
-    LogicalRegionT<1> store_region = runtime->create_logical_region(ctx, address_space, field_space);
+    LogicalRegionT<1> store_region =
+        runtime->create_logical_region(ctx, address_space, field_space);
 
     // Initialize store.
-    RegionRequirement init_req(store_region, READ_WRITE, EXCLUSIVE, store_region);
+    RegionRequirement init_req(store_region, READ_WRITE, EXCLUSIVE,
+                               store_region);
     init_req.add_field(FID_VALUE);
     InlineLauncher init_launcher(init_req);
     PhysicalRegion init_region = runtime->map_region(ctx, init_launcher);
@@ -50,9 +54,12 @@ void dispatch_task(const Task *task,
 
     // Partition store into individual entries.
     Rect<1> color_bounds = address_space_bounds;
-    IndexSpaceT<1> color_space = runtime->create_index_space(ctx, color_bounds);
-    IndexPartition address_partition = runtime->create_equal_partition(ctx, address_space, color_space);
-    LogicalPartition store_partition = runtime->get_logical_partition(store_region, address_partition);
+    IndexSpaceT<1> color_space =
+        runtime->create_index_space(ctx, color_bounds);
+    IndexPartition address_partition =
+        runtime->create_equal_partition(ctx, address_space, color_space);
+    LogicalPartition store_partition =
+        runtime->get_logical_partition(store_region, address_partition);
 
     while (true) {
         // Display prompt.
@@ -68,19 +75,28 @@ void dispatch_task(const Task *task,
         address_t address;
         iss >> command >> address;
         if (command == "get") {
-            std::cout << "Reading address " << address << std::endl;
-            TaskLauncher launcher(GET_TASK_ID, TaskArgument(&address, sizeof(address)));
-            launcher.add_region_requirement(RegionRequirement(runtime->get_logical_subregion_by_color(store_partition, address), READ_ONLY, EXCLUSIVE, store_region));
+            TaskLauncher launcher(GET_TASK_ID,
+                                  TaskArgument(&address, sizeof(address)));
+            launcher.add_region_requirement(
+                RegionRequirement(runtime->get_logical_subregion_by_color(
+                                      store_partition, address),
+                                  READ_ONLY, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             Future future = runtime->execute_task(ctx, launcher);
-            std::cout << "Value is: " << future.get_result<value_t>() << std::endl;
+            std::cout << "Value is: " << future.get_result<value_t>()
+                      << std::endl;
         } else if (command == "set") {
             value_t value;
             iss >> value;
-            Record record = { address = address, value = value };
-            std::cout << "Setting address " << address << " to " << value << std::endl;
-            TaskLauncher launcher(SET_TASK_ID, TaskArgument(&record, sizeof(record)));
-            launcher.add_region_requirement(RegionRequirement(runtime->get_logical_subregion_by_color(store_partition, address), WRITE_DISCARD, EXCLUSIVE, store_region));
+            Record record = {address = address, value = value};
+            std::cout << "Setting address " << address << " to " << value
+                      << std::endl;
+            TaskLauncher launcher(SET_TASK_ID,
+                                  TaskArgument(&record, sizeof(record)));
+            launcher.add_region_requirement(
+                RegionRequirement(runtime->get_logical_subregion_by_color(
+                                      store_partition, address),
+                                  WRITE_DISCARD, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             Future future = runtime->execute_task(ctx, launcher);
             future.wait();
@@ -102,8 +118,7 @@ void dispatch_task(const Task *task,
     runtime->destroy_index_space(ctx, address_space);
 }
 
-value_t get_task(const Task *task,
-                 const std::vector<PhysicalRegion> &regions,
+value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
                  Context ctx, Runtime *runtime) {
     address_t address = *(address_t *)task->args;
     const FieldAccessor<READ_ONLY, value_t, 1> store(regions[0], FID_VALUE);
@@ -111,13 +126,13 @@ value_t get_task(const Task *task,
     return value;
 }
 
-void set_task(const Task *task,
-              const std::vector<PhysicalRegion> &regions,
+void set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
               Context ctx, Runtime *runtime) {
-    Record record = *(const Record*)task->args;
+    Record record = *(const Record *)task->args;
     address_t address = record.address;
     value_t value = record.value;
-    const FieldAccessor<WRITE_DISCARD, value_t, 1> store(regions[0], FID_VALUE);
+    const FieldAccessor<WRITE_DISCARD, value_t, 1> store(regions[0],
+                                                         FID_VALUE);
     store[address] = value;
     std::cout << "-- " << address << " <= " << value << std::endl;
     return;
@@ -129,7 +144,8 @@ int main(int argc, char **argv) {
     {
         TaskVariantRegistrar registrar(DISPATCH_TASK_ID, "dispatch");
         registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-        Runtime::preregister_task_variant<dispatch_task>(registrar, "dispatch");
+        Runtime::preregister_task_variant<dispatch_task>(registrar,
+                                                         "dispatch");
     }
 
     {

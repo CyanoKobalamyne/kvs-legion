@@ -13,7 +13,7 @@ enum TaskID {
   SET_TASK_ID,
 };
 
-typedef uint8_t address_t;
+typedef uint16_t address_t;
 typedef int64_t value_t;
 
 typedef struct Record {
@@ -58,7 +58,9 @@ value_t get_task(const Task *task,
                  const std::vector<PhysicalRegion> &regions,
                  Context ctx, Runtime *runtime) {
     address_t address = *(address_t *)task->args;
-    return address / 2;
+    value_t value = address;
+    value <<= 48;
+    return value;
 }
 
 void set_task(const Task *task,

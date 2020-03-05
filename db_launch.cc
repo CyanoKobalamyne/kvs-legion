@@ -68,7 +68,22 @@ void dispatch_task(const Task *task,
     LogicalPartition store_partition =
         runtime->get_logical_partition(store_region, address_partition);
 
+    std::list<Future> get_futures;
     while (true) {
+        // Check if we have results, if so, display them.
+        auto iter = get_futures.begin();
+        while (iter != get_futures.end()) {
+            Future future = *iter;
+            if (future.is_ready()) {
+                Record record = future.get_result<Record>();
+                std::cout << "Value at address " << record.address
+                          << " is: " << record.value << std::endl;
+                iter = get_futures.erase(iter);
+            } else {
+                iter++;
+            }
+        }
+
         // Display prompt.
         std::cout << "> ";
 
@@ -90,6 +105,7 @@ void dispatch_task(const Task *task,
                                   READ_ONLY, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             Future future = runtime->execute_task(ctx, launcher);
+            get_futures.push_back(future);
         } else if (command == "set") {
             value_t value;
             iss >> value;
@@ -101,7 +117,7 @@ void dispatch_task(const Task *task,
                                       store_partition, address),
                                   WRITE_DISCARD, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
-            Future future = runtime->execute_task(ctx, launcher);
+            runtime->execute_task(ctx, launcher);
         } else if (command == "quit") {
             break;
         } else {
@@ -119,8 +135,8 @@ void dispatch_task(const Task *task,
     runtime->destroy_index_space(ctx, address_space);
 }
 
-value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
-                 Context ctx, Runtime *runtime) {
+Record get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
+                Context ctx, Runtime *runtime) {
     address_t address = *(address_t *)task->args;
     const FieldAccessor<READ_ONLY, value_t, 1> store(regions[0], FID_VALUE);
     value_t value = store[address];
@@ -128,9 +144,8 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     std::uniform_int_distribution<int> distribution(MIN_SLEEP_SECONDS,
                                                     MAX_SLEEP_SECONDS);
     std::this_thread::sleep_for(std::chrono::seconds(distribution(generator)));
-    std::cout << "Value at address " << address << " is: " << value
-              << std::endl;
-    return value;
+    Record record = {address = address, value = value};
+    return record;
 }
 
 void set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
@@ -161,7 +176,7 @@ int main(int argc, char **argv) {
     {
         TaskVariantRegistrar registrar(GET_TASK_ID, "get");
         registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-        Runtime::preregister_task_variant<value_t, get_task>(registrar, "get");
+        Runtime::preregister_task_variant<Record, get_task>(registrar, "get");
     }
 
     {

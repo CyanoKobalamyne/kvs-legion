@@ -48,6 +48,12 @@ void dispatch_task(const Task *task,
     }
     runtime->unmap_region(ctx, init_region);
 
+    // Partition store into individual entries.
+    Rect<1> color_bounds = address_space_bounds;
+    IndexSpaceT<1> color_space = runtime->create_index_space(ctx, color_bounds);
+    IndexPartition address_partition = runtime->create_equal_partition(ctx, address_space, color_space);
+    LogicalPartition store_partition = runtime->get_logical_partition(store_region, address_partition);
+
     while (true) {
         // Display prompt.
         std::cout << "> ";
@@ -64,7 +70,7 @@ void dispatch_task(const Task *task,
         if (command == "get") {
             std::cout << "Reading address " << address << std::endl;
             TaskLauncher launcher(GET_TASK_ID, TaskArgument(&address, sizeof(address)));
-            launcher.add_region_requirement(RegionRequirement(store_region, READ_ONLY, EXCLUSIVE, store_region));
+            launcher.add_region_requirement(RegionRequirement(runtime->get_logical_subregion_by_color(store_partition, address), READ_ONLY, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             Future future = runtime->execute_task(ctx, launcher);
             std::cout << "Value is: " << future.get_result<value_t>() << std::endl;
@@ -74,7 +80,7 @@ void dispatch_task(const Task *task,
             Record record = { address = address, value = value };
             std::cout << "Setting address " << address << " to " << value << std::endl;
             TaskLauncher launcher(SET_TASK_ID, TaskArgument(&record, sizeof(record)));
-            launcher.add_region_requirement(RegionRequirement(store_region, WRITE_DISCARD, EXCLUSIVE, store_region));
+            launcher.add_region_requirement(RegionRequirement(runtime->get_logical_subregion_by_color(store_partition, address), WRITE_DISCARD, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             Future future = runtime->execute_task(ctx, launcher);
             future.wait();

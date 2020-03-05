@@ -48,42 +48,43 @@ void dispatch_task(const Task *task,
     }
     runtime->unmap_region(ctx, init_region);
 
+    while (true) {
+        // Display prompt.
+        std::cout << "> ";
 
-    // Display prompt.
-    std::cout << "> ";
+        // Read line.
+        std::string line;
+        std::getline(std::cin, line);
 
-    // Read line.
-    std::string line;
-    std::getline(std::cin, line);
-
-    // Parse command.
-    std::stringstream iss(line);
-    std::string command;
-    address_t address;
-    iss >> command >> address;
-    if (command == "get") {
-        std::cout << "Reading address " << address << std::endl;
-        TaskLauncher launcher(GET_TASK_ID, TaskArgument(&address, sizeof(address)));
-        launcher.add_region_requirement(RegionRequirement(store_region, READ_ONLY, EXCLUSIVE, store_region));
-        launcher.add_field(0, FID_VALUE);
-        Future future = runtime->execute_task(ctx, launcher);
-        std::cout << "Value is: " << future.get_result<value_t>() << std::endl;
-    } else if (command == "set") {
-        value_t value;
-        iss >> value;
-        Record record = { address = address, value = value };
-        std::cout << "Setting address " << address << " to " << value << std::endl;
-        TaskLauncher launcher(SET_TASK_ID, TaskArgument(&record, sizeof(record)));
-        launcher.add_region_requirement(RegionRequirement(store_region, WRITE_DISCARD, EXCLUSIVE, store_region));
-        launcher.add_field(0, FID_VALUE);
-        Future future = runtime->execute_task(ctx, launcher);
-        future.wait();
-        std::cout << "Done." << std::endl;
-    } else {
-        std::cout << "Unrecognized command: " << command << std::endl;
-        std::cout << "Allowed commands:" << std::endl;
-        std::cout << "\tget <address>" << std::endl;
-        std::cout << "\tset <address> <value>" << std::endl;
+        // Parse command.
+        std::stringstream iss(line);
+        std::string command;
+        address_t address;
+        iss >> command >> address;
+        if (command == "get") {
+            std::cout << "Reading address " << address << std::endl;
+            TaskLauncher launcher(GET_TASK_ID, TaskArgument(&address, sizeof(address)));
+            launcher.add_region_requirement(RegionRequirement(store_region, READ_ONLY, EXCLUSIVE, store_region));
+            launcher.add_field(0, FID_VALUE);
+            Future future = runtime->execute_task(ctx, launcher);
+            std::cout << "Value is: " << future.get_result<value_t>() << std::endl;
+        } else if (command == "set") {
+            value_t value;
+            iss >> value;
+            Record record = { address = address, value = value };
+            std::cout << "Setting address " << address << " to " << value << std::endl;
+            TaskLauncher launcher(SET_TASK_ID, TaskArgument(&record, sizeof(record)));
+            launcher.add_region_requirement(RegionRequirement(store_region, WRITE_DISCARD, EXCLUSIVE, store_region));
+            launcher.add_field(0, FID_VALUE);
+            Future future = runtime->execute_task(ctx, launcher);
+            future.wait();
+            std::cout << "Done." << std::endl;
+        } else {
+            std::cout << "Unrecognized command: " << command << std::endl;
+            std::cout << "Allowed commands:" << std::endl;
+            std::cout << "\tget <address>" << std::endl;
+            std::cout << "\tset <address> <value>" << std::endl;
+        }
     }
 
     // Free up store.

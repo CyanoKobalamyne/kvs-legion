@@ -79,11 +79,14 @@ void dispatch_task(const Task *task,
             Future future = runtime->execute_task(ctx, launcher);
             future.wait();
             std::cout << "Done." << std::endl;
+        } else if (command == "quit") {
+            break;
         } else {
             std::cout << "Unrecognized command: " << command << std::endl;
             std::cout << "Allowed commands:" << std::endl;
             std::cout << "\tget <address>" << std::endl;
             std::cout << "\tset <address> <value>" << std::endl;
+            std::cout << "\tquit" << std::endl;
         }
     }
 

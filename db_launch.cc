@@ -1,5 +1,6 @@
-#include "stdio.h"
-#include "string.h"
+#include <iostream>
+#include <sstream>
+#include <string>
 
 #include "legion.h"
 
@@ -14,19 +15,28 @@ enum TaskID {
 void dispatch_task(const Task *task,
                    const std::vector<PhysicalRegion> &regions,
                    Context ctx, Runtime *runtime) {
-    char command[4];
-    int address, value;
-    printf("> ");
-    scanf("%3s %d %d", command, &address, &value);
-    if (strcmp(command, "get") == 0) {
-        printf("Reading address %d...\n", address);
+    std::string line;
+    std::string command;
+    uint64_t address;
+
+    std::cout << "> ";
+    std::getline(std::cin, line);
+    std::stringstream iss(line);
+    iss >> command >> address;
+    if (command == "get") {
+        std::cout << "Reading address" << address << std::endl;
         TaskLauncher launcher(GET_TASK_ID, TaskArgument(&address, sizeof(address)));
         Future get_future = runtime->execute_task(ctx, launcher);
-        printf("Value is %d.\n", get_future.get_result<int>());
-    } else if (strcmp(command, "set") == 0) {
-        printf("Setting address %d to %d...\n", address, value);
+        std::cout << "Value is: " << get_future.get_result<int>() << std::endl;
+    } else if (command == "set") {
+        int64_t value;
+        iss >> value;
+        std::cout << "Setting address " << address << " to " << value << std::endl;
     } else {
-        printf("Unrecognized command\n");
+        std::cout << "Unrecognized command: " << command << std::endl;
+        std::cout << "Allowed commands:" << std::endl;
+        std::cout << "\tget <address>" << std::endl;
+        std::cout << "\tset <address> <value>" << std::endl;
     }
 }
 

@@ -1,0 +1,11 @@
+# Ignore compiled files
+*.o
+*.a
+db_launch
+
+# Ignore files generates by Legion
+legion_defines.h
+realm_defines.h
+
+# Ignore IDE files
+.vscode/

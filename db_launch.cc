@@ -33,7 +33,7 @@ void dispatch_task(const Task *task,
     std::stringstream iss(line);
     iss >> command >> address;
     if (command == "get") {
-        std::cout << "Reading address" << address << std::endl;
+        std::cout << "Reading address " << address << std::endl;
         TaskLauncher launcher(GET_TASK_ID, TaskArgument(&address, sizeof(address)));
         Future future = runtime->execute_task(ctx, launcher);
         std::cout << "Value is: " << future.get_result<value_t>() << std::endl;

@@ -128,7 +128,8 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     std::uniform_int_distribution<int> distribution(MIN_SLEEP_SECONDS,
                                                     MAX_SLEEP_SECONDS);
     std::this_thread::sleep_for(std::chrono::seconds(distribution(generator)));
-    std::cout << "Value at address " << address << " is: " << value
+    std::cout << std::endl
+              << "Value at address " << address << " is: " << value
               << std::endl;
     return value;
 }

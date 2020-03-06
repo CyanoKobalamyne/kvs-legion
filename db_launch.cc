@@ -11,8 +11,8 @@
 
 using namespace Legion;
 
-const int MIN_SLEEP_SECONDS = 1;
-const int MAX_SLEEP_SECONDS = 5;
+const int MIN_SLEEP_SECONDS = 5;
+const int MAX_SLEEP_SECONDS = 10;
 const std::string PROMPT = "> ";
 
 enum TaskID {

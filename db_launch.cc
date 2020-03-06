@@ -13,6 +13,7 @@ using namespace Legion;
 
 const int MIN_SLEEP_SECONDS = 1;
 const int MAX_SLEEP_SECONDS = 5;
+const std::string PROMPT = "> ";
 
 enum TaskID {
     DISPATCH_TASK_ID,
@@ -68,14 +69,12 @@ void dispatch_task(const Task *task,
     LogicalPartition store_partition =
         runtime->get_logical_partition(store_region, address_partition);
 
-    while (true) {
-        // Display prompt.
-        std::cout << "> ";
+    // Display prompt.
+    std::cout << PROMPT;
 
-        // Read line.
-        std::string line;
-        std::getline(std::cin, line);
-
+    // REPL
+    std::string line;
+    while (std::getline(std::cin, line)) {
         // Parse command.
         std::stringstream iss(line);
         std::string command;
@@ -111,12 +110,18 @@ void dispatch_task(const Task *task,
             std::cout << "\tset <address> <value>" << std::endl;
             std::cout << "\tquit" << std::endl;
         }
+
+        // Display prompt.
+        std::cout << PROMPT << std::flush;
     }
 
     // Free up store.
     runtime->destroy_logical_region(ctx, store_region);
     runtime->destroy_field_space(ctx, field_space);
     runtime->destroy_index_space(ctx, address_space);
+
+    std::cout << "Bye!" << std::endl;
+    return;
 }
 
 value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
@@ -128,9 +133,9 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     std::uniform_int_distribution<int> distribution(MIN_SLEEP_SECONDS,
                                                     MAX_SLEEP_SECONDS);
     std::this_thread::sleep_for(std::chrono::seconds(distribution(generator)));
-    std::cout << std::endl
-              << "Value at address " << address << " is: " << value
-              << std::endl;
+    std::cout << std::endl;
+    std::cout << "Value of " << address << " is " << value << std::endl;
+    std::cout << PROMPT << std::flush;
     return value;
 }
 
@@ -146,6 +151,9 @@ void set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
                                                     MAX_SLEEP_SECONDS);
     std::this_thread::sleep_for(std::chrono::seconds(distribution(generator)));
     store[address] = value;
+    std::cout << std::endl;
+    std::cout << "Value " << value << " written to " << address << std::endl;
+    std::cout << PROMPT << std::flush;
     return;
 }
 

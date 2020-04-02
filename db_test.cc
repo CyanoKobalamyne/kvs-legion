@@ -1,6 +1,5 @@
-#include <cstdint>
-
 #include <chrono>
+#include <cstdint>
 #include <iostream>
 #include <random>
 #include <sstream>
@@ -11,14 +10,11 @@
 
 using namespace Legion;
 
-const int MIN_SLEEP_SECONDS = 5;
-const int MAX_SLEEP_SECONDS = 10;
-const std::string PROMPT = "> ";
-
 enum TaskID {
     DISPATCH_TASK_ID,
     GET_TASK_ID,
     SET_TASK_ID,
+    TRANSFER_TASK_ID,
 };
 
 enum FieldID {
@@ -28,10 +24,20 @@ enum FieldID {
 typedef uint16_t address_t;
 typedef int64_t value_t;
 
-typedef struct Record {
+typedef struct {
+    address_t address;
+} GetTaskPayload;
+
+typedef struct {
     address_t address;
     value_t value;
-} Record;
+} SetTaskPayload;
+
+typedef struct {
+    address_t source;
+    address_t target;
+    value_t amount;
+} TransferTaskPayload;
 
 void dispatch_task(const Task *task,
                    const std::vector<PhysicalRegion> &regions, Context ctx,
@@ -97,9 +103,9 @@ void dispatch_task(const Task *task,
         runtime->get_logical_partition(store_region, address_partition);
 
     // Generate task order.
-    std::vector<int> task_nums(read_task_count + write_task_count);
-    std::iota(std::begin(task_nums), std::end(task_nums), 0);
-    std::random_shuffle(std::begin(task_nums), std::end(task_nums));
+    std::vector<int> task_indices(read_task_count + write_task_count);
+    std::iota(std::begin(task_indices), std::end(task_indices), 0);
+    std::random_shuffle(std::begin(task_indices), std::end(task_indices));
 
     // For generating addresses and values.
     std::default_random_engine rnd_gen;
@@ -113,26 +119,45 @@ void dispatch_task(const Task *task,
 
     // Start all tasks.
     std::vector<Future> futures;
-    for (unsigned int task_num : task_nums) {
+    for (unsigned int task_index : task_indices) {
         address_t address = address_dist(rnd_gen);
-        if (task_num < read_task_count) {
-            TaskLauncher launcher(GET_TASK_ID,
-                                  TaskArgument(&address, sizeof(address)));
+        if (task_index < read_task_count) {
+            GetTaskPayload payload = {.address = address};
+            TaskLauncher launcher(
+                GET_TASK_ID, TaskArgument(&payload, sizeof(GetTaskPayload)));
             launcher.add_region_requirement(
                 RegionRequirement(runtime->get_logical_subregion_by_color(
                                       store_partition, address),
                                   READ_ONLY, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             futures.push_back(runtime->execute_task(ctx, launcher));
-        } else {
+        } else if (task_index < write_task_count) {
             value_t value = value_dist(rnd_gen);
-            Record record = {address = address, value = value};
-            TaskLauncher launcher(SET_TASK_ID,
-                                  TaskArgument(&record, sizeof(record)));
+            SetTaskPayload payload = {.address = address, .value = value};
+            TaskLauncher launcher(
+                SET_TASK_ID, TaskArgument(&payload, sizeof(SetTaskPayload)));
             launcher.add_region_requirement(
                 RegionRequirement(runtime->get_logical_subregion_by_color(
                                       store_partition, address),
                                   WRITE_DISCARD, EXCLUSIVE, store_region));
+            launcher.add_field(0, FID_VALUE);
+            futures.push_back(runtime->execute_task(ctx, launcher));
+        } else {
+            address_t target = address_dist(rnd_gen);
+            value_t amount = value_dist(rnd_gen);
+            TransferTaskPayload payload = {
+                .source = address, .target = target, .amount = amount};
+            TaskLauncher launcher(
+                TRANSFER_TASK_ID,
+                TaskArgument(&payload, sizeof(TransferTaskPayload)));
+            launcher.add_region_requirement(
+                RegionRequirement(runtime->get_logical_subregion_by_color(
+                                      store_partition, address),
+                                  READ_WRITE, EXCLUSIVE, store_region));
+            launcher.add_region_requirement(
+                RegionRequirement(runtime->get_logical_subregion_by_color(
+                                      store_partition, target),
+                                  READ_WRITE, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             futures.push_back(runtime->execute_task(ctx, launcher));
         }
@@ -159,7 +184,8 @@ void dispatch_task(const Task *task,
 
 value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
                  Context ctx, Runtime *runtime) {
-    address_t address = *(address_t *)task->args;
+    GetTaskPayload payload = *(const GetTaskPayload *)task->args;
+    address_t address = payload.address;
     const FieldAccessor<READ_ONLY, value_t, 1> store(regions[0], FID_VALUE);
     value_t value = store[address];
     return value;
@@ -167,13 +193,37 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
 
 value_t set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
                  Context ctx, Runtime *runtime) {
-    Record record = *(const Record *)task->args;
-    address_t address = record.address;
-    value_t value = record.value;
+    SetTaskPayload payload = *(const SetTaskPayload *)task->args;
+    address_t address = payload.address;
+    value_t value = payload.value;
     const FieldAccessor<WRITE_DISCARD, value_t, 1> store(regions[0],
                                                          FID_VALUE);
     store[address] = value;
     return 0;
+}
+
+value_t transfer_task(const Task *task,
+                      const std::vector<PhysicalRegion> &regions, Context ctx,
+                      Runtime *runtime) {
+    TransferTaskPayload payload = *(const TransferTaskPayload *)task->args;
+    address_t source = payload.source;
+    address_t target = payload.target;
+    value_t amount = payload.amount;
+    const FieldAccessor<READ_WRITE, value_t, 1> source_store(regions[0],
+                                                             FID_VALUE);
+    const FieldAccessor<READ_WRITE, value_t, 1> target_store(regions[1],
+                                                             FID_VALUE);
+    value_t source_val = source_store[source];
+    value_t target_val = target_store[target];
+    if (amount <= source_val) {
+        source_store[source] = source_val - amount;
+        target_store[target] = target_val + amount;
+        return amount;
+    } else {
+        source_store[source] = 0;
+        target_store[target] = target_val + source_val;
+        return source_val;
+    }
 }
 
 int main(int argc, char **argv) {
@@ -196,6 +246,13 @@ int main(int argc, char **argv) {
         TaskVariantRegistrar registrar(SET_TASK_ID, "set");
         registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
         Runtime::preregister_task_variant<value_t, set_task>(registrar, "set");
+    }
+
+    {
+        TaskVariantRegistrar registrar(TRANSFER_TASK_ID, "transfer");
+        registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
+        Runtime::preregister_task_variant<value_t, transfer_task>(registrar,
+                                                                  "transfer");
     }
 
     return Runtime::start(argc, argv);

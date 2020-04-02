@@ -66,10 +66,6 @@ void dispatch_task(const Task *task,
                 break;
             case '?':
             default:
-                std::cout << "Usage: " << args.argv[0]
-                          << " [-m max_address] [-r read_tasks] [-w "
-                             "write_tasks] [-t transfer_tasks]"
-                          << std::endl;
                 break;
         }
     }
@@ -169,11 +165,12 @@ void dispatch_task(const Task *task,
                 RegionRequirement(runtime->get_logical_subregion_by_color(
                                       store_partition, address),
                                   READ_WRITE, EXCLUSIVE, store_region));
+            launcher.add_field(0, FID_VALUE);
             launcher.add_region_requirement(
                 RegionRequirement(runtime->get_logical_subregion_by_color(
                                       store_partition, target),
                                   READ_WRITE, EXCLUSIVE, store_region));
-            launcher.add_field(0, FID_VALUE);
+            launcher.add_field(1, FID_VALUE);
             futures.push_back(runtime->execute_task(ctx, launcher));
         }
     }

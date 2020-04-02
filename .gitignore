@@ -1,7 +1,9 @@
-# Ignore compiled files
-*.o
-*.a
-db_launch
+# Ignore binaries
+db_*
+!db_*.*
+
+# Ignore compiled object and archive files
+*.[oa]
 
 # Ignore files generates by Legion
 legion_defines.h

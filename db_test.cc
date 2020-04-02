@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 
+#include "getopt.h"
 #include "legion.h"
 
 using namespace Legion;
@@ -42,31 +43,45 @@ typedef struct {
 void dispatch_task(const Task *task,
                    const std::vector<PhysicalRegion> &regions, Context ctx,
                    Runtime *runtime) {
-    const InputArgs &command_args = Runtime::get_input_args();
-    unsigned int address_count = 0;
+    const InputArgs &args = Runtime::get_input_args();
+    unsigned int address_count = 1;
     unsigned int read_task_count = 0;
     unsigned int write_task_count = 0;
-    for (int i = 1; i < command_args.argc; i++) {
-        // Skip any legion runtime configuration parameters
-        if (command_args.argv[i][0] == '-') {
-            i++;
-            continue;
-        }
+    unsigned int transfer_task_count = 0;
 
-        if (address_count == 0) {
-            address_count = atoi(command_args.argv[i]);
-        } else if (read_task_count == 0) {
-            read_task_count = atoi(command_args.argv[i]);
-        } else {
-            write_task_count = atoi(command_args.argv[i]);
-            break;
+    int opt;
+    while ((opt = getopt(args.argc, args.argv, "m:r:w:t:")) != -1) {
+        switch (opt) {
+            case 'm':
+                address_count = atoi(optarg);
+                break;
+            case 'r':
+                read_task_count = atoi(optarg);
+                break;
+            case 'w':
+                write_task_count = atoi(optarg);
+                break;
+            case 't':
+                transfer_task_count = atoi(optarg);
+                break;
+            case '?':
+            default:
+                std::cout << "Usage: " << args.argv[0]
+                          << " [-m max_address] [-r read_tasks] [-w "
+                             "write_tasks] [-t transfer_tasks]"
+                          << std::endl;
+                break;
         }
     }
 
-    if (address_count == 0 || read_task_count == 0) {
-        std::cout << "Usage: " << command_args.argv[0]
-                  << " <max_address> <read_tasks> [<write_tasks>]"
+    unsigned long total_task_count =
+        read_task_count + write_task_count + transfer_task_count;
+    if (total_task_count == 0) {
+        std::cout << "Usage: " << args.argv[0]
+                  << " [-m max_address] [-r read_tasks] [-w "
+                     "write_tasks] [-t transfer_tasks]"
                   << std::endl;
+        exit(EXIT_FAILURE);
     }
 
     // Define key-value store.
@@ -103,7 +118,7 @@ void dispatch_task(const Task *task,
         runtime->get_logical_partition(store_region, address_partition);
 
     // Generate task order.
-    std::vector<int> task_indices(read_task_count + write_task_count);
+    std::vector<int> task_indices(total_task_count);
     std::iota(std::begin(task_indices), std::end(task_indices), 0);
     std::random_shuffle(std::begin(task_indices), std::end(task_indices));
 
@@ -131,7 +146,7 @@ void dispatch_task(const Task *task,
                                   READ_ONLY, EXCLUSIVE, store_region));
             launcher.add_field(0, FID_VALUE);
             futures.push_back(runtime->execute_task(ctx, launcher));
-        } else if (task_index < write_task_count) {
+        } else if (task_index < read_task_count + write_task_count) {
             value_t value = value_dist(rnd_gen);
             SetTaskPayload payload = {.address = address, .value = value};
             TaskLauncher launcher(

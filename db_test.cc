@@ -54,7 +54,7 @@ void dispatch_task(const Task *task,
                    const std::vector<PhysicalRegion> &regions, Context ctx,
                    Runtime *runtime) {
     const InputArgs &args = Runtime::get_input_args();
-    unsigned int memory_size = 2;
+    unsigned int address_count = 1;
     unsigned int read_task_count = 0;
     unsigned int write_task_count = 0;
     unsigned int transfer_task_count = 0;
@@ -66,7 +66,7 @@ void dispatch_task(const Task *task,
            -1) {
         switch (opt) {
             case 'm':
-                memory_size = atoi(optarg);
+                address_count = atoi(optarg);
                 break;
             case 'r':
                 read_task_count = atoi(optarg);
@@ -94,15 +94,9 @@ void dispatch_task(const Task *task,
                   << std::endl;
         exit(EXIT_FAILURE);
     }
-    if (n_batches * 2 > memory_size) {
-        std::cout
-            << "Batch size too big, must be less than half of memory size."
-            << std::endl;
-        exit(EXIT_FAILURE);
-    }
 
     // Define key-value store.
-    Rect<1> address_space_bounds(0, memory_size - 1);
+    Rect<1> address_space_bounds(0, address_count);
     IndexSpaceT<1> address_space =
         runtime->create_index_space(ctx, address_space_bounds);
     FieldSpace field_space = runtime->create_field_space(ctx);
@@ -135,36 +129,17 @@ void dispatch_task(const Task *task,
         runtime->get_logical_partition(store_region, address_partition);
 
     // Generate task order.
-    std::vector<unsigned int> task_indices(total_task_count);
-    std::iota(task_indices.begin(), task_indices.end(), 0);
-    std::random_shuffle(task_indices.begin(), task_indices.end());
+    std::vector<int> task_indices(total_task_count);
+    std::iota(std::begin(task_indices), std::end(task_indices), 0);
+    std::random_shuffle(std::begin(task_indices), std::end(task_indices));
 
-    std::default_random_engine rand_engine;
-
-    // Generate addresses.
+    // For generating addresses and values.
+    std::default_random_engine rnd_gen;
     std::uniform_int_distribution<address_t> address_dist(
         address_space_bounds.lo, address_space_bounds.hi);
-    std::vector<address_t> all_addresses(memory_size);
-    std::iota(all_addresses.begin(), all_addresses.end(), 0);
-    std::vector<address_t> addresses_1(n_batches * total_task_count);
-    std::vector<address_t> addresses_2(n_batches * total_task_count);
-    for (unsigned int i = 0; i < n_batches; i++) {
-        std::random_shuffle(all_addresses.begin(), all_addresses.end());
-        std::copy(all_addresses.begin(), all_addresses.begin() + n_batches + 1,
-                  addresses_1.begin() + i * n_batches);
-        std::copy(all_addresses.begin() + n_batches + 1,
-                  all_addresses.begin() + 2 * n_batches + 1,
-                  addresses_2.begin() + i * n_batches);
-    }
-
-    // Generate values.
     std::uniform_int_distribution<value_t> value_dist(
         std::numeric_limits<value_t>::min(),
         std::numeric_limits<value_t>::max());
-    std::vector<value_t> values(n_batches * total_task_count);
-    std::generate(values.begin(), values.end(), [&value_dist, &rand_engine]() {
-        return value_dist(rand_engine);
-    });
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -178,9 +153,14 @@ void dispatch_task(const Task *task,
             *(unsigned int *)arg = n_batches;
             GetTaskPayload *payload =
                 (GetTaskPayload *)((unsigned int *)arg + 1);
+            std::set<address_t> used;
             for (unsigned int i = 0; i < n_batches; i++) {
-                payload[i] = {.address =
-                                  addresses_1[n_batches * task_index + i]};
+                address_t address;
+                do {
+                    address = address_dist(rnd_gen);
+                } while (used.count(address) != 0);
+                used.insert(address);
+                payload[i] = {.address = address};
             }
             TaskLauncher launcher(GET_TASK_ID, TaskArgument(arg, arg_size));
             for (unsigned int i = 0; i < n_batches; i++) {
@@ -198,10 +178,15 @@ void dispatch_task(const Task *task,
             *(unsigned int *)arg = n_batches;
             SetTaskPayload *payload =
                 (SetTaskPayload *)((unsigned int *)arg + 1);
+            std::set<address_t> used;
             for (unsigned int i = 0; i < n_batches; i++) {
-                payload[i] = {
-                    .address = addresses_1[n_batches * task_index + i],
-                    .value = values[n_batches * task_index + i]};
+                address_t address;
+                do {
+                    address = address_dist(rnd_gen);
+                } while (used.count(address) != 0);
+                used.insert(address);
+                value_t value = value_dist(rnd_gen);
+                payload[i] = {.address = address, .value = value};
             }
             TaskLauncher launcher(SET_TASK_ID, TaskArgument(arg, arg_size));
             for (unsigned int i = 0; i < n_batches; i++) {
@@ -219,11 +204,19 @@ void dispatch_task(const Task *task,
             *(unsigned int *)arg = n_batches;
             TransferTaskPayload *payload =
                 (TransferTaskPayload *)((unsigned int *)arg + 1);
+            std::set<address_t> used;
             for (unsigned int i = 0; i < n_batches; i++) {
+                address_t source;
+                do {
+                    source = address_dist(rnd_gen);
+                } while (used.count(source) != 0);
+                address_t target;
+                do {
+                    target = address_dist(rnd_gen);
+                } while (used.count(target) != 0);
+                value_t amount = value_dist(rnd_gen);
                 payload[i] = {
-                    .source = addresses_1[n_batches * task_index + i],
-                    .target = addresses_2[n_batches * task_index + i],
-                    .amount = values[n_batches * task_index + i]};
+                    .source = source, .target = target, .amount = amount};
             }
             TaskLauncher launcher(TRANSFER_TASK_ID,
                                   TaskArgument(arg, arg_size));

@@ -154,7 +154,10 @@ void dispatch_task(const Task *task,
             launcher.add_field(0, FID_VALUE);
             futures.push_back(runtime->execute_task(ctx, launcher));
         } else {
-            address_t target = address_dist(rnd_gen);
+            address_t target = address;
+            while (target == address) {
+                target = address_dist(rnd_gen);
+            }
             value_t amount = value_dist(rnd_gen);
             TransferTaskPayload payload = {
                 .source = address, .target = target, .amount = amount};

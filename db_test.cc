@@ -40,6 +40,14 @@ typedef struct {
     value_t amount;
 } TransferTaskPayload;
 
+const struct option options[] = {
+    {"m", required_argument, NULL, 'm'},
+    {"r", required_argument, NULL, 'r'},
+    {"w", required_argument, NULL, 'w'},
+    {"t", required_argument, NULL, 't'},
+    {0, 0, 0, 0},
+};
+
 void dispatch_task(const Task *task,
                    const std::vector<PhysicalRegion> &regions, Context ctx,
                    Runtime *runtime) {
@@ -50,7 +58,9 @@ void dispatch_task(const Task *task,
     unsigned int transfer_task_count = 0;
 
     int opt;
-    while ((opt = getopt(args.argc, args.argv, "m:r:w:t:")) != -1) {
+    opterr = 0;
+    while ((opt = getopt_long_only(args.argc, args.argv, "", options, NULL)) !=
+           -1) {
         switch (opt) {
             case 'm':
                 address_count = atoi(optarg);

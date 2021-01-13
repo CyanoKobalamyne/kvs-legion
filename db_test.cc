@@ -66,23 +66,23 @@ void dispatch_task(const Task *task,
     while ((opt = getopt_long_only(args.argc, args.argv, "", options, NULL)) !=
            -1) {
         switch (opt) {
-            case 'm':
-                address_count = atoi(optarg);
-                break;
-            case 'r':
-                read_task_count = atoi(optarg);
-                break;
-            case 'w':
-                write_task_count = atoi(optarg);
-                break;
-            case 't':
-                transfer_task_count = atoi(optarg);
-                break;
-            case 'b':
-                n_batches = atoi(optarg);
-            case '?':
-            default:
-                break;
+        case 'm':
+            address_count = atoi(optarg);
+            break;
+        case 'r':
+            read_task_count = atoi(optarg);
+            break;
+        case 'w':
+            write_task_count = atoi(optarg);
+            break;
+        case 't':
+            transfer_task_count = atoi(optarg);
+            break;
+        case 'b':
+            n_batches = atoi(optarg);
+        case '?':
+        default:
+            break;
         }
     }
 

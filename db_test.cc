@@ -298,7 +298,7 @@ value_t transfer_task(const Task *task,
         const FieldAccessor<READ_WRITE, value_t, 1> source_store(
             regions[2 * i], FID_VALUE);
         const FieldAccessor<READ_WRITE, value_t, 1> target_store(
-            regions[2 * 1 + 1], FID_VALUE);
+            regions[2 * i + 1], FID_VALUE);
         value_t source_val = source_store[source];
         value_t target_val = target_store[target];
         if (amount <= source_val) {

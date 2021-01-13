@@ -10,6 +10,7 @@
 #include "alloca.h"
 #include "getopt.h"
 #include "legion.h"
+#include "x86intrin.h"
 
 using namespace Legion;
 
@@ -246,7 +247,7 @@ void dispatch_task(const Task *task,
 
     auto duration =
         std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
-    std::cout << duration.count() << std::endl;
+    std::cout << "Time: " << duration.count() << " ns" << std::endl;
 
     // Free up store.
     runtime->destroy_logical_region(ctx, store_region);
@@ -258,20 +259,25 @@ void dispatch_task(const Task *task,
 
 value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
                  Context ctx, Runtime *runtime) {
+    unsigned long long start = __rdtsc();
     unsigned int n_batches = *(const unsigned int *)task->args;
     const GetTaskPayload *payload =
         (const GetTaskPayload *)((const unsigned int *)task->args + 1);
+    value_t sum = 0;
     for (unsigned int i = 0; i < n_batches; i++) {
         address_t address = payload[i].address;
         const FieldAccessor<READ_ONLY, value_t, 1> store(regions[i],
                                                          FID_VALUE);
-        value_t value = store[address];
+        sum += store[address];
     }
+    unsigned long long end = __rdtsc();
+    std::cerr << "[GET] took " << end - start << ", sum " << sum << std::endl;
     return 0;
 }
 
 value_t set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
                  Context ctx, Runtime *runtime) {
+    unsigned long long start = __rdtsc();
     unsigned int n_batches = *(const unsigned int *)task->args;
     const SetTaskPayload *payload =
         (const SetTaskPayload *)((const unsigned int *)task->args + 1);
@@ -282,12 +288,15 @@ value_t set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
                                                              FID_VALUE);
         store[address] = value;
     }
+    unsigned long long end = __rdtsc();
+    std::cerr << "[SET] took " << end - start << std::endl;
     return 0;
 }
 
 value_t transfer_task(const Task *task,
                       const std::vector<PhysicalRegion> &regions, Context ctx,
                       Runtime *runtime) {
+    unsigned long long start = __rdtsc();
     unsigned int n_batches = *(const unsigned int *)task->args;
     const TransferTaskPayload *payload =
         (const TransferTaskPayload *)((const unsigned int *)task->args + 1);
@@ -309,6 +318,8 @@ value_t transfer_task(const Task *task,
             target_store[target] = target_val + source_val;
         }
     }
+    unsigned long long end = __rdtsc();
+    std::cerr << "[TRANSFER] took " << end - start << std::endl;
     return 0;
 }
 

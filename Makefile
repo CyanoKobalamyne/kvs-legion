@@ -3,10 +3,12 @@ ifndef LG_RT_DIR
 $(error LG_RT_DIR variable is not defined, aborting build)
 endif
 
-# Set flags for Legion.
-DEBUG           ?= 1				# Include debugging symbols
-MAX_DIM         ?= 3				# Maximum number of dimensions
-OUTPUT_LEVEL    ?= LEVEL_DEBUG		# Compile time logging level
+# Include debugging symbols by default.
+DEBUG           ?= 1
+# Set maximum number of dimensions.
+MAX_DIM         ?= 3
+# Set default logging level.
+OUTPUT_LEVEL    ?= LEVEL_DEBUG
 
 # Default target
 PROG		?= test

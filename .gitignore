@@ -12,6 +12,7 @@ realm_defines.h
 # Ignore IDE files
 .vscode/
 .mypy_cache/
+compile_commands.json
 
 # Include log files
 log/

@@ -1,5 +1,7 @@
-# Set Legion runtime directory.
-LG_RT_DIR=./legion/runtime
+# Legion runtime directory must be specified for compilation.
+ifndef LG_RT_DIR
+$(error LG_RT_DIR variable is not defined, aborting build)
+endif
 
 # Set flags for Legion.
 DEBUG           ?= 1				# Include debugging symbols

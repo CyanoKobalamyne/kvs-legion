@@ -202,7 +202,7 @@ void dispatch_task(const Task *task,
 
     // Wait for all tasks to complete.
     for (Future future : futures) {
-        future.get_result<value_t>();
+        future.get_void_result();
     }
 
     auto stop = std::chrono::high_resolution_clock::now();
@@ -228,8 +228,8 @@ void dispatch_task(const Task *task,
     return;
 }
 
-value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
-                 Context ctx, Runtime *runtime) {
+void get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
+              Context ctx, Runtime *runtime) {
     unsigned long long start = __rdtsc();
     GetTaskPayload payload = *(const GetTaskPayload *)task->args;
     address_t address = payload.address;
@@ -240,11 +240,10 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
               << value << std::endl;
     get_count++;
     get_time += end - start;
-    return 0;
 }
 
-value_t set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
-                 Context ctx, Runtime *runtime) {
+void set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
+              Context ctx, Runtime *runtime) {
     unsigned long long start = __rdtsc();
     SetTaskPayload payload = *(const SetTaskPayload *)task->args;
     address_t address = payload.address;
@@ -256,12 +255,11 @@ value_t set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     std::cerr << "[SET] took " << (end - start) / CPU_FREQ_GHZ << std::endl;
     set_count++;
     set_time += end - start;
-    return 0;
 }
 
-value_t transfer_task(const Task *task,
-                      const std::vector<PhysicalRegion> &regions, Context ctx,
-                      Runtime *runtime) {
+void transfer_task(const Task *task,
+                   const std::vector<PhysicalRegion> &regions, Context ctx,
+                   Runtime *runtime) {
     unsigned long long start = __rdtsc();
     TransferTaskPayload payload = *(const TransferTaskPayload *)task->args;
     address_t source = payload.source;
@@ -285,7 +283,6 @@ value_t transfer_task(const Task *task,
               << std::endl;
     transfer_count++;
     transfer_time += end - start;
-    return 0;
 }
 
 int main(int argc, char **argv) {
@@ -301,20 +298,20 @@ int main(int argc, char **argv) {
     {
         TaskVariantRegistrar registrar(GET_TASK_ID, "get");
         registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-        Runtime::preregister_task_variant<value_t, get_task>(registrar, "get");
+        Runtime::preregister_task_variant<get_task>(registrar, "get");
     }
 
     {
         TaskVariantRegistrar registrar(SET_TASK_ID, "set");
         registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-        Runtime::preregister_task_variant<value_t, set_task>(registrar, "set");
+        Runtime::preregister_task_variant<set_task>(registrar, "set");
     }
 
     {
         TaskVariantRegistrar registrar(TRANSFER_TASK_ID, "transfer");
         registrar.add_constraint(ProcessorConstraint(Processor::LOC_PROC));
-        Runtime::preregister_task_variant<value_t, transfer_task>(registrar,
-                                                                  "transfer");
+        Runtime::preregister_task_variant<transfer_task>(registrar,
+                                                         "transfer");
     }
 
     return Runtime::start(argc, argv);

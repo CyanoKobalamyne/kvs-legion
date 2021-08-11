@@ -12,6 +12,8 @@
 #include "legion.h"
 #include "x86intrin.h"
 
+#define CPU_FREQ_GHZ 2.6
+
 using namespace Legion;
 
 enum TaskID {
@@ -271,7 +273,8 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
         sum += store[address];
     }
     unsigned long long end = __rdtsc();
-    std::cerr << "[GET] took " << end - start << ", sum " << sum << std::endl;
+    std::cerr << "[GET] took " << (end - start) / CPU_FREQ_GHZ << ", sum "
+              << sum << std::endl;
     return 0;
 }
 
@@ -289,7 +292,7 @@ value_t set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
         store[address] = value;
     }
     unsigned long long end = __rdtsc();
-    std::cerr << "[SET] took " << end - start << std::endl;
+    std::cerr << "[SET] took " << (end - start) / CPU_FREQ_GHZ << std::endl;
     return 0;
 }
 
@@ -319,7 +322,8 @@ value_t transfer_task(const Task *task,
         }
     }
     unsigned long long end = __rdtsc();
-    std::cerr << "[TRANSFER] took " << end - start << std::endl;
+    std::cerr << "[TRANSFER] took " << (end - start) / CPU_FREQ_GHZ
+              << std::endl;
     return 0;
 }
 

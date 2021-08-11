@@ -8,7 +8,6 @@
 #include <string>
 #include <thread>
 
-#include "alloca.h"
 #include "getopt.h"
 #include "legion.h"
 #include "x86intrin.h"
@@ -51,7 +50,6 @@ const struct option options[] = {
     {.name = "r", .has_arg = required_argument, .flag = NULL, .val = 'r'},
     {.name = "w", .has_arg = required_argument, .flag = NULL, .val = 'w'},
     {.name = "t", .has_arg = required_argument, .flag = NULL, .val = 't'},
-    {.name = "b", .has_arg = required_argument, .flag = NULL, .val = 'b'},
     {0, 0, 0, 0},
 };
 
@@ -70,7 +68,6 @@ void dispatch_task(const Task *task,
     unsigned int read_task_count = 0;
     unsigned int write_task_count = 0;
     unsigned int transfer_task_count = 0;
-    unsigned int n_batches = 1;
 
     int opt;
     opterr = 0;
@@ -89,8 +86,6 @@ void dispatch_task(const Task *task,
         case 't':
             transfer_task_count = atoi(optarg);
             break;
-        case 'b':
-            n_batches = atoi(optarg);
         case '?':
         default:
             break;
@@ -158,92 +153,49 @@ void dispatch_task(const Task *task,
     // Start all tasks.
     std::vector<Future> futures;
     for (unsigned int task_index : task_indices) {
+        address_t address = address_dist(rnd_gen);
         if (task_index < read_task_count) {
-            size_t arg_size =
-                sizeof(unsigned int) + n_batches * sizeof(GetTaskPayload);
-            void *arg = alloca(arg_size);
-            *(unsigned int *)arg = n_batches;
-            GetTaskPayload *payload =
-                (GetTaskPayload *)((unsigned int *)arg + 1);
-            std::set<address_t> used;
-            for (unsigned int i = 0; i < n_batches; i++) {
-                address_t address;
-                do {
-                    address = address_dist(rnd_gen);
-                } while (used.count(address) != 0);
-                used.insert(address);
-                payload[i] = {.address = address};
-            }
-            TaskLauncher launcher(GET_TASK_ID, TaskArgument(arg, arg_size));
-            for (unsigned int i = 0; i < n_batches; i++) {
-                launcher.add_region_requirement(
-                    RegionRequirement(runtime->get_logical_subregion_by_color(
-                                          store_partition, payload[i].address),
-                                      READ_ONLY, EXCLUSIVE, store_region));
-                launcher.add_field(i, FID_VALUE);
-            }
+            GetTaskPayload payload = {.address = address};
+            TaskLauncher launcher(
+                GET_TASK_ID, TaskArgument(&payload, sizeof(GetTaskPayload)));
+            launcher.add_region_requirement(
+                RegionRequirement(runtime->get_logical_subregion_by_color(
+                                      store_partition, address),
+                                  READ_ONLY, EXCLUSIVE, store_region));
+            launcher.add_field(0, FID_VALUE);
             futures.push_back(runtime->execute_task(ctx, launcher));
         } else if (task_index < read_task_count + write_task_count) {
-            size_t arg_size =
-                sizeof(unsigned int) + n_batches * sizeof(SetTaskPayload);
-            void *arg = alloca(arg_size);
-            *(unsigned int *)arg = n_batches;
-            SetTaskPayload *payload =
-                (SetTaskPayload *)((unsigned int *)arg + 1);
-            std::set<address_t> used;
-            for (unsigned int i = 0; i < n_batches; i++) {
-                address_t address;
-                do {
-                    address = address_dist(rnd_gen);
-                } while (used.count(address) != 0);
-                used.insert(address);
-                value_t value = value_dist(rnd_gen);
-                payload[i] = {.address = address, .value = value};
-            }
-            TaskLauncher launcher(SET_TASK_ID, TaskArgument(arg, arg_size));
-            for (unsigned int i = 0; i < n_batches; i++) {
-                launcher.add_region_requirement(
-                    RegionRequirement(runtime->get_logical_subregion_by_color(
-                                          store_partition, payload[i].address),
-                                      WRITE_DISCARD, EXCLUSIVE, store_region));
-                launcher.add_field(i, FID_VALUE);
-            }
+            value_t value = value_dist(rnd_gen);
+            SetTaskPayload payload = {.address = address, .value = value};
+            TaskLauncher launcher(
+                SET_TASK_ID, TaskArgument(&payload, sizeof(SetTaskPayload)));
+            launcher.add_region_requirement(
+                RegionRequirement(runtime->get_logical_subregion_by_color(
+                                      store_partition, address),
+                                  WRITE_DISCARD, EXCLUSIVE, store_region));
+            launcher.add_field(0, FID_VALUE);
             futures.push_back(runtime->execute_task(ctx, launcher));
         } else {
-            size_t arg_size =
-                sizeof(unsigned int) + n_batches * sizeof(TransferTaskPayload);
-            void *arg = alloca(arg_size);
-            *(unsigned int *)arg = n_batches;
-            TransferTaskPayload *payload =
-                (TransferTaskPayload *)((unsigned int *)arg + 1);
-            std::set<address_t> used;
-            for (unsigned int i = 0; i < n_batches; i++) {
-                address_t source;
-                do {
-                    source = address_dist(rnd_gen);
-                } while (used.count(source) != 0);
-                address_t target;
-                do {
-                    target = address_dist(rnd_gen);
-                } while (used.count(target) != 0);
-                value_t amount = value_dist(rnd_gen);
-                payload[i] = {
-                    .source = source, .target = target, .amount = amount};
+            address_t target = address;
+            while (target == address) {
+                target = address_dist(rnd_gen);
             }
-            TaskLauncher launcher(TRANSFER_TASK_ID,
-                                  TaskArgument(arg, arg_size));
-            for (unsigned int i = 0; i < n_batches; i++) {
-                launcher.add_region_requirement(
-                    RegionRequirement(runtime->get_logical_subregion_by_color(
-                                          store_partition, payload[i].source),
-                                      READ_WRITE, EXCLUSIVE, store_region));
-                launcher.add_field(2 * i, FID_VALUE);
-                launcher.add_region_requirement(
-                    RegionRequirement(runtime->get_logical_subregion_by_color(
-                                          store_partition, payload[i].target),
-                                      READ_WRITE, EXCLUSIVE, store_region));
-                launcher.add_field(2 * i + 1, FID_VALUE);
-            }
+            value_t amount = value_dist(rnd_gen);
+            TransferTaskPayload payload = {
+                .source = address, .target = target, .amount = amount};
+            TaskLauncher launcher(
+                TRANSFER_TASK_ID,
+                TaskArgument(&payload, sizeof(TransferTaskPayload)));
+            launcher.add_region_requirement(
+                RegionRequirement(runtime->get_logical_subregion_by_color(
+                                      store_partition, address),
+                                  READ_WRITE, EXCLUSIVE, store_region));
+            launcher.add_field(0, FID_VALUE);
+            launcher.add_region_requirement(
+                RegionRequirement(runtime->get_logical_subregion_by_color(
+                                      store_partition, target),
+                                  READ_WRITE, EXCLUSIVE, store_region));
+            launcher.add_field(1, FID_VALUE);
             futures.push_back(runtime->execute_task(ctx, launcher));
         }
     }
@@ -279,19 +231,13 @@ void dispatch_task(const Task *task,
 value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
                  Context ctx, Runtime *runtime) {
     unsigned long long start = __rdtsc();
-    unsigned int n_batches = *(const unsigned int *)task->args;
-    const GetTaskPayload *payload =
-        (const GetTaskPayload *)((const unsigned int *)task->args + 1);
-    value_t sum = 0;
-    for (unsigned int i = 0; i < n_batches; i++) {
-        address_t address = payload[i].address;
-        const FieldAccessor<READ_ONLY, value_t, 1> store(regions[i],
-                                                         FID_VALUE);
-        sum += store[address];
-    }
+    GetTaskPayload payload = *(const GetTaskPayload *)task->args;
+    address_t address = payload.address;
+    const FieldAccessor<READ_ONLY, value_t, 1> store(regions[0], FID_VALUE);
+    value_t value = store[address];
     unsigned long long end = __rdtsc();
-    std::cerr << "[GET] took " << (end - start) / CPU_FREQ_GHZ << ", sum "
-              << sum << std::endl;
+    std::cerr << "[GET] took " << (end - start) / CPU_FREQ_GHZ << ", value "
+              << value << std::endl;
     get_count++;
     get_time += end - start;
     return 0;
@@ -300,16 +246,12 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
 value_t set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
                  Context ctx, Runtime *runtime) {
     unsigned long long start = __rdtsc();
-    unsigned int n_batches = *(const unsigned int *)task->args;
-    const SetTaskPayload *payload =
-        (const SetTaskPayload *)((const unsigned int *)task->args + 1);
-    for (unsigned int i = 0; i < n_batches; i++) {
-        address_t address = payload[i].address;
-        value_t value = payload[i].value;
-        const FieldAccessor<WRITE_DISCARD, value_t, 1> store(regions[i],
-                                                             FID_VALUE);
-        store[address] = value;
-    }
+    SetTaskPayload payload = *(const SetTaskPayload *)task->args;
+    address_t address = payload.address;
+    value_t value = payload.value;
+    const FieldAccessor<WRITE_DISCARD, value_t, 1> store(regions[0],
+                                                         FID_VALUE);
+    store[address] = value;
     unsigned long long end = __rdtsc();
     std::cerr << "[SET] took " << (end - start) / CPU_FREQ_GHZ << std::endl;
     set_count++;
@@ -321,26 +263,22 @@ value_t transfer_task(const Task *task,
                       const std::vector<PhysicalRegion> &regions, Context ctx,
                       Runtime *runtime) {
     unsigned long long start = __rdtsc();
-    unsigned int n_batches = *(const unsigned int *)task->args;
-    const TransferTaskPayload *payload =
-        (const TransferTaskPayload *)((const unsigned int *)task->args + 1);
-    for (unsigned int i = 0; i < n_batches; i++) {
-        address_t source = payload[i].source;
-        address_t target = payload[i].target;
-        value_t amount = payload[i].amount;
-        const FieldAccessor<READ_WRITE, value_t, 1> source_store(
-            regions[2 * i], FID_VALUE);
-        const FieldAccessor<READ_WRITE, value_t, 1> target_store(
-            regions[2 * i + 1], FID_VALUE);
-        value_t source_val = source_store[source];
-        value_t target_val = target_store[target];
-        if (amount <= source_val) {
-            source_store[source] = source_val - amount;
-            target_store[target] = target_val + amount;
-        } else {
-            source_store[source] = 0;
-            target_store[target] = target_val + source_val;
-        }
+    TransferTaskPayload payload = *(const TransferTaskPayload *)task->args;
+    address_t source = payload.source;
+    address_t target = payload.target;
+    value_t amount = payload.amount;
+    const FieldAccessor<READ_WRITE, value_t, 1> source_store(regions[0],
+                                                             FID_VALUE);
+    const FieldAccessor<READ_WRITE, value_t, 1> target_store(regions[1],
+                                                             FID_VALUE);
+    value_t source_val = source_store[source];
+    value_t target_val = target_store[target];
+    if (amount <= source_val) {
+        source_store[source] = source_val - amount;
+        target_store[target] = target_val + amount;
+    } else {
+        source_store[source] = 0;
+        target_store[target] = target_val + source_val;
     }
     unsigned long long end = __rdtsc();
     std::cerr << "[TRANSFER] took " << (end - start) / CPU_FREQ_GHZ

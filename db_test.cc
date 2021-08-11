@@ -101,8 +101,8 @@ void dispatch_task(const Task *task,
         read_task_count + write_task_count + transfer_task_count;
     if (total_task_count == 0) {
         std::cout << "Usage: " << args.argv[0]
-                  << " [-m max_address] [-r read_tasks] [-w "
-                     "write_tasks] [-t transfer_tasks]"
+                  << " [-m max_address] [-r read_tasks] [-w write_tasks]"
+                     " [-t transfer_tasks]"
                   << std::endl;
         exit(EXIT_FAILURE);
     }

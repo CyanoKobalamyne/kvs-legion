@@ -3,8 +3,8 @@ ifndef LG_RT_DIR
 $(error LG_RT_DIR variable is not defined, aborting build)
 endif
 
-# Include debugging symbols by default.
-DEBUG           ?= 1
+# Don't include debugging symbols by default.
+DEBUG           ?= 0
 # Set maximum number of dimensions.
 MAX_DIM         ?= 3
 # Set default logging level.

@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstdint>
+#include <iomanip>
 #include <iostream>
 #include <random>
 #include <set>
@@ -53,6 +54,13 @@ const struct option options[] = {
     {.name = "b", .has_arg = required_argument, .flag = NULL, .val = 'b'},
     {0, 0, 0, 0},
 };
+
+unsigned long long get_time;
+unsigned long long get_count;
+unsigned long long set_time;
+unsigned long long set_count;
+unsigned long long transfer_time;
+unsigned long long transfer_count;
 
 void dispatch_task(const Task *task,
                    const std::vector<PhysicalRegion> &regions, Context ctx,
@@ -251,6 +259,15 @@ void dispatch_task(const Task *task,
         std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start);
     std::cout << "Time: " << duration.count() << " ns" << std::endl;
 
+    std::cout << std::fixed << std::setprecision(0);
+    std::cout << "GET tasks took " << (get_time / CPU_FREQ_GHZ / get_count)
+              << " ns on average\n";
+    std::cout << "SET tasks took " << (set_time / CPU_FREQ_GHZ / set_count)
+              << " ns on average\n";
+    std::cout << "TRANSFER tasks took "
+              << (transfer_time / CPU_FREQ_GHZ / transfer_count)
+              << " ns on average\n";
+
     // Free up store.
     runtime->destroy_logical_region(ctx, store_region);
     runtime->destroy_field_space(ctx, field_space);
@@ -275,6 +292,8 @@ value_t get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     unsigned long long end = __rdtsc();
     std::cerr << "[GET] took " << (end - start) / CPU_FREQ_GHZ << ", sum "
               << sum << std::endl;
+    get_count++;
+    get_time += end - start;
     return 0;
 }
 
@@ -293,6 +312,8 @@ value_t set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
     }
     unsigned long long end = __rdtsc();
     std::cerr << "[SET] took " << (end - start) / CPU_FREQ_GHZ << std::endl;
+    set_count++;
+    set_time += end - start;
     return 0;
 }
 
@@ -324,6 +345,8 @@ value_t transfer_task(const Task *task,
     unsigned long long end = __rdtsc();
     std::cerr << "[TRANSFER] took " << (end - start) / CPU_FREQ_GHZ
               << std::endl;
+    transfer_count++;
+    transfer_time += end - start;
     return 0;
 }
 

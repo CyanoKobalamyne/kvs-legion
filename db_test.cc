@@ -10,9 +10,6 @@
 
 #include "getopt.h"
 #include "legion.h"
-#include "x86intrin.h"
-
-#define CPU_FREQ_GHZ 2.6
 
 using namespace Legion;
 
@@ -212,13 +209,10 @@ void dispatch_task(const Task *task,
     std::cout << "Time: " << duration.count() << " ns" << std::endl;
 
     std::cout << std::fixed << std::setprecision(0);
-    std::cout << "GET tasks took " << (get_time / CPU_FREQ_GHZ / get_count)
-              << " ns on average\n";
-    std::cout << "SET tasks took " << (set_time / CPU_FREQ_GHZ / set_count)
-              << " ns on average\n";
-    std::cout << "TRANSFER tasks took "
-              << (transfer_time / CPU_FREQ_GHZ / transfer_count)
-              << " ns on average\n";
+    std::cout << "Get: " << (get_time / get_count) << " ns average\n";
+    std::cout << "Set: " << (set_time / set_count) << " ns average\n";
+    std::cout << "Transfer: " << (transfer_time / transfer_count)
+              << " ns average\n";
 
     // Free up store.
     runtime->destroy_logical_region(ctx, store_region);
@@ -230,37 +224,41 @@ void dispatch_task(const Task *task,
 
 void get_task(const Task *task, const std::vector<PhysicalRegion> &regions,
               Context ctx, Runtime *runtime) {
-    unsigned long long start = __rdtsc();
+    auto start = std::chrono::high_resolution_clock::now();
     GetTaskPayload payload = *(const GetTaskPayload *)task->args;
     address_t address = payload.address;
     const FieldAccessor<READ_ONLY, value_t, 1> store(regions[0], FID_VALUE);
     value_t value = store[address];
-    unsigned long long end = __rdtsc();
-    std::cerr << "[GET] took " << (end - start) / CPU_FREQ_GHZ << ", value "
-              << value << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    std::cerr << "[GET] took " << duration.count() << " ns, value " << value
+              << std::endl;
     get_count++;
-    get_time += end - start;
+    get_time += duration.count();
 }
 
 void set_task(const Task *task, const std::vector<PhysicalRegion> &regions,
               Context ctx, Runtime *runtime) {
-    unsigned long long start = __rdtsc();
+    auto start = std::chrono::high_resolution_clock::now();
     SetTaskPayload payload = *(const SetTaskPayload *)task->args;
     address_t address = payload.address;
     value_t value = payload.value;
     const FieldAccessor<WRITE_DISCARD, value_t, 1> store(regions[0],
                                                          FID_VALUE);
     store[address] = value;
-    unsigned long long end = __rdtsc();
-    std::cerr << "[SET] took " << (end - start) / CPU_FREQ_GHZ << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    std::cerr << "[SET] took " << duration.count() << " ns" << std::endl;
     set_count++;
-    set_time += end - start;
+    set_time += duration.count();
 }
 
 void transfer_task(const Task *task,
                    const std::vector<PhysicalRegion> &regions, Context ctx,
                    Runtime *runtime) {
-    unsigned long long start = __rdtsc();
+    auto start = std::chrono::high_resolution_clock::now();
     TransferTaskPayload payload = *(const TransferTaskPayload *)task->args;
     address_t source = payload.source;
     address_t target = payload.target;
@@ -278,11 +276,12 @@ void transfer_task(const Task *task,
         source_store[source] = 0;
         target_store[target] = target_val + source_val;
     }
-    unsigned long long end = __rdtsc();
-    std::cerr << "[TRANSFER] took " << (end - start) / CPU_FREQ_GHZ
-              << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    std::cerr << "[TRANSFER] took " << duration.count() << " ns" << std::endl;
     transfer_count++;
-    transfer_time += end - start;
+    transfer_time += duration.count();
 }
 
 int main(int argc, char **argv) {
